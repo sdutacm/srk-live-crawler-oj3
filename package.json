@@ -1,0 +1,29 @@
+{
+  "name": "srk-live-crawler-oj3",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdutacm/srk-live-crawler-oj3.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sdutacm/srk-live-crawler-oj3/issues"
+  },
+  "homepage": "https://github.com/sdutacm/srk-live-crawler-oj3#readme",
+  "dependencies": {
+    "axios": "^0.27.2",
+    "bluebird": "^3.7.2",
+    "cross-env": "^6.0.3",
+    "fs-extra": "^8.1.0",
+    "log4js": "^6.1.0",
+    "mysql2": "^2.1.0",
+    "redis": "^2.8.0"
+  }
+}
