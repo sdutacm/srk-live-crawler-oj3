@@ -172,7 +172,7 @@ async function grabSolutions() {
     return;
   }
 
-  const nextLastSolutionId = res[res.length - 1].solutionId;
+  const nextLastSolutionId = solutions[solutions.length - 1].solutionId;
   const nextFbSolutionIdMap = { ...last.fbSolutionIdMap };
   solutions = solutions
     .filter((item) => isValidResult(item))
