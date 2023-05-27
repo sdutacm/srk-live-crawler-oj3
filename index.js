@@ -55,6 +55,7 @@ let last = {
 };
 let competitionDetail;
 let problemMap = {};
+let userIdFilter = null;
 
 const ESolutionResult = {
   WT: 0,
@@ -175,6 +176,12 @@ async function grabSolutions() {
   const nextFbSolutionIdMap = { ...last.fbSolutionIdMap };
   solutions = solutions
     .filter((item) => isValidResult(item))
+    .filter((item) => {
+      if (Array.isArray(userIdFilter) && userIdFilter.length) {
+        return item.userId && userIdFilter.includes(`${item.userId}`);
+      }
+      return true;
+    })
     .map((item) => {
       const problem = problemMap[item.problemId];
       if (!problem) {
@@ -232,6 +239,11 @@ async function main() {
   init();
   log.info('start', id, competitionId);
   try {
+    userIdFilter = fs.readJSONSync(userIdFilterConfig) || null;
+  } catch (e) {
+    log.info('no id filter');
+  }
+  try {
     last = fs.readJSONSync(`./data/${competitionId}_${id}.json`);
   } catch (e) {
     log.info('no last data');
@@ -247,6 +259,7 @@ async function main() {
 
 id = process.argv[2];
 competitionId = +process.argv[3];
+userIdFilterConfig = +process.argv[4];
 if (!id || !competitionId) {
   console.error('id required');
   process.exit(1);
