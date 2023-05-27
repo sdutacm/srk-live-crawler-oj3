@@ -237,7 +237,7 @@ async function main() {
   initLogger(id);
   log = logger.getLogger(isDev ? 'dev' : 'prod');
   init();
-  log.info('start', id, competitionId);
+  log.info('start', id, competitionId, userIdFilterConfig);
   try {
     userIdFilter = fs.readJSONSync(userIdFilterConfig) || null;
     log.info('using id filter', userIdFilter);
@@ -260,7 +260,7 @@ async function main() {
 
 id = process.argv[2];
 competitionId = +process.argv[3];
-userIdFilterConfig = +process.argv[4];
+userIdFilterConfig = process.argv[4];
 if (!id || !competitionId) {
   console.error('id required');
   process.exit(1);
