@@ -240,6 +240,7 @@ async function main() {
   log.info('start', id, competitionId);
   try {
     userIdFilter = fs.readJSONSync(userIdFilterConfig) || null;
+    log.info('using id filter', userIdFilter);
   } catch (e) {
     log.info('no id filter');
   }
