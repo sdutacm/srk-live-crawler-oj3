@@ -55,6 +55,7 @@ let last = {
 };
 let competitionDetail;
 let problemMap = {};
+let userMap = {};
 let userIdFilter = null;
 
 const ESolutionResult = {
@@ -151,10 +152,35 @@ async function grabProblemMap() {
   return map;
 }
 
+async function grabUserMap() {
+  const res = await query(
+    `SELECT * FROM competition_user WHERE competition_id=? AND role=2 AND banned=false AND status IN (1, 5, 6) ORDER BY user_id ASC`,
+    [competitionId],
+  );
+  const parse = (str, fallback) => {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      return fallback();
+    }
+  }
+  const map = {};
+  res.forEach((item) => {
+    map[item.user_id] = {
+      userId: +item.userId,
+      info: parse(item.info, () => ({})),
+      unofficialParticipation: item.unofficial_participation,
+    };
+  });
+  userMap = map;
+  log.info('userMap size', Object.keys(userMap).length);
+  return map;
+}
+
 async function grabSolutions() {
   log.info('grab solutions after', last.lastSolutionId);
   const res = await query(
-    `SELECT solution_id AS solutionId, user_id AS userId, problem_id AS problemId, result, sub_time AS submittedAt FROM solution WHERE solution_id>? and competition_id=? ORDER BY solution_id ASC LIMIT ?`,
+    `SELECT solution_id AS solutionId, user_id AS userId, problem_id AS problemId, result, sub_time AS submittedAt FROM solution WHERE solution_id>? AND competition_id=? ORDER BY solution_id ASC LIMIT ?`,
     [last.lastSolutionId, competitionId, GRAB_LIMIT],
   );
   let solutions = [];
@@ -176,6 +202,7 @@ async function grabSolutions() {
   const nextFbSolutionIdMap = { ...last.fbSolutionIdMap };
   solutions = solutions
     .filter((item) => isValidResult(item))
+    .filter((item) => !!userMap[item.userId])
     .filter((item) => {
       if (Array.isArray(userIdFilter) && userIdFilter.length) {
         return item.userId && userIdFilter.includes(`${item.userId}`);
@@ -252,6 +279,7 @@ async function main() {
 
   await grabCompetitionDetail();
   await grabProblemMap();
+  await grabUserMap();
   while (true) {
     await grabSolutions();
     await sleep(GRAB_INTERVAL);
