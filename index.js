@@ -202,7 +202,13 @@ async function grabSolutions() {
   const nextFbSolutionIdMap = { ...last.fbSolutionIdMap };
   solutions = solutions
     .filter((item) => isValidResult(item))
-    .filter((item) => !!userMap[item.userId])
+    .filter((item) => {
+      if (!userMap[item.userId]) {
+        log.info('skip cuz user not found', item.solutionId, item.userId);
+        return false;
+      }
+      return true;
+    })
     .filter((item) => {
       if (Array.isArray(userIdFilter) && userIdFilter.length) {
         return item.userId && userIdFilter.includes(`${item.userId}`);
