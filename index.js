@@ -167,7 +167,7 @@ async function grabUserMap() {
   const map = {};
   res.forEach((item) => {
     map[item.user_id] = {
-      userId: +item.userId,
+      userId: +item.user_id,
       info: parse(item.info, () => ({})),
       unofficialParticipation: item.unofficial_participation,
     };
