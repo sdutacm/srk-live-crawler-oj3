@@ -18,7 +18,7 @@ if (isDev) {
 const MAX_MYSQL_POOL_CONNECTION = 2;
 const GRAB_LIMIT = 100;
 const GRAB_INTERVAL = 2 * 1000;
-const RL_API_BASE = 'https://rl.mushan.top';
+const RL_API_BASE = 'https://rl-api.algoux.cn';
 
 axios.defaults.baseURL = RL_API_BASE;
 axios.defaults.headers.common['algoux'] = 'rankland';
@@ -243,7 +243,7 @@ async function grabSolutions() {
   );
   // push to rankland
   const postData = solutions.map((item) => ({
-    id: item.solutionId,
+    id: `${item.solutionId}`,
     problemID: item.problemAlias,
     memberID: `${item.userId}`,
     result: item.srkResult,
