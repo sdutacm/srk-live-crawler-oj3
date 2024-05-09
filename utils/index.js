@@ -56,3 +56,44 @@ exports.sleep = function sleep(ms) {
     setTimeout(resolve, ms);
   });
 }
+
+exports.formatTimeDuration = function formatTimeDuration(
+  time,
+  targetUnit = 'ms',
+  fmt = (num) => num,
+) {
+  let ms = -1;
+  switch (time[1]) {
+    case 'ms':
+      ms = time[0];
+      break;
+    case 's':
+      ms = time[0] * 1000;
+      break;
+    case 'min':
+      ms = time[0] * 1000 * 60;
+      break;
+    case 'h':
+      ms = time[0] * 1000 * 60 * 60;
+      break;
+    case 'd':
+      ms = time[0] * 1000 * 60 * 60 * 24;
+      break;
+    default:
+      throw new Error(`Unknown time unit: ${time[1]}`);
+  }
+  switch (targetUnit) {
+    case 'ms':
+      return ms;
+    case 's':
+      return fmt(ms / 1000);
+    case 'min':
+      return fmt(ms / 1000 / 60);
+    case 'h':
+      return fmt(ms / 1000 / 60 / 60);
+    case 'd':
+      return fmt(ms / 1000 / 60 / 60 / 24);
+    default:
+      throw new Error(`Unknown time unit: ${targetUnit}`);
+  }
+}

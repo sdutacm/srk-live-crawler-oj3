@@ -20,10 +20,15 @@
   "dependencies": {
     "axios": "^0.27.2",
     "bluebird": "^3.7.2",
+    "cheerio": "1.0.0-rc.12",
     "cross-env": "^6.0.3",
     "fs-extra": "^8.1.0",
+    "lodash": "^4.17.21",
     "log4js": "^6.1.0",
+    "long": "^4.0.0",
     "mysql2": "^2.1.0",
-    "redis": "^2.8.0"
+    "protobufjs": "^6.11.4",
+    "redis": "^2.8.0",
+    "socket.io-client": "^4.7.5"
   }
 }
