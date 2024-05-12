@@ -22,8 +22,8 @@ if (isDev) {
 }
 
 const MAX_MYSQL_POOL_CONNECTION = 2;
-const GRAB_LIMIT = 2;
-const GRAB_INTERVAL = 5000;
+const GRAB_LIMIT = 100;
+const GRAB_INTERVAL = 200;
 // const RL_API_BASE = 'https://acm.sdut.edu.cn/rl_api_v2';
 const RL_API_BASE = 'http://127.0.0.1:3000';
 const AUTH_TOKEN = 'rankland_';
@@ -429,12 +429,16 @@ function pushEvents() {
   });
 
   return new Promise((resolve, reject) => {
-    socket.emit(
+    socket.timeout(5000).emit(
       'ProducerEvent',
       rankland_live_contest_producer.BatchProducerEvent.encode({
         events: batchData,
       }).finish(),
-      (resp) => {
+      (err, resp) => {
+        if (err) {
+          log.error('socket.io err', err);
+          return reject(err);
+        }
         log.info('socket.io resp', resp);
         if (resp.success) {
           eventBuff = [];
