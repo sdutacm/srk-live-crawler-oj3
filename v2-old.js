@@ -13,6 +13,12 @@ const {
 
 const isDev = process.env.NODE_ENV === 'development';
 
+// const RL_API_BASE = 'https://acm.sdut.edu.cn/rl_api_v2';
+const RL_API_BASE = 'https://acm.sdut.edu.cn/rankland/api';
+const RL_SOCKET_BASE = 'https://acm.sdut.edu.cn';
+const RL_SOCKET_IO_PATH = '/rankland_web/socket.io';
+const AUTH_TOKEN = 'rankland_';
+
 let log;
 let dbConf = {};
 if (isDev) {
@@ -24,9 +30,6 @@ if (isDev) {
 const MAX_MYSQL_POOL_CONNECTION = 2;
 const GRAB_LIMIT = 100;
 const GRAB_INTERVAL = 200;
-// const RL_API_BASE = 'https://acm.sdut.edu.cn/rl_api_v2';
-const RL_API_BASE = 'http://127.0.0.1:3000';
-const AUTH_TOKEN = 'rankland_';
 
 axios.defaults.baseURL = RL_API_BASE;
 axios.defaults.headers.common['x-token'] = AUTH_TOKEN;
@@ -55,9 +58,9 @@ function init() {
     }
 
     if (!socket) {
-      socket = io(`${RL_API_BASE}/producer`, {
+      socket = io(`${RL_SOCKET_BASE}/producer`, {
         transports: ['websocket'],
-        path: '/rankland_web/socket.io',
+        path: RL_SOCKET_IO_PATH,
         auth: {
           token: AUTH_TOKEN,
           id: `${os.hostname()}_${process.pid}`,

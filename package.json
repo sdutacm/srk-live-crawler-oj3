@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "gen:proto:producer": "pbjs -t static-module -w commonjs -r rankland_live_contest_producer --force-long -o proto/rankland_live_contest_producer.js shared/proto/rankland_live_contest/producer.proto && pbts -o proto/rankland_live_contest_producer.d.ts proto/rankland_live_contest_producer.js",
+    "gen:proto:client": "pbjs -t static-module -w commonjs -r rankland_live_contest_client --force-long -o proto/rankland_live_contest_client.js shared/proto/rankland_live_contest/client.proto && pbts -o proto/rankland_live_contest_client.d.ts proto/rankland_live_contest_client.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
