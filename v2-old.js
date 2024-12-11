@@ -15,7 +15,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 // const RL_API_BASE = 'https://acm.sdut.edu.cn/rl_api_v2';
 const RL_API_BASE = 'https://acm.sdut.edu.cn/rankland/api';
-const RL_SOCKET_BASE = 'https://acm.sdut.edu.cn';
+const RL_SOCKET_IO_BASE = 'https://acm.sdut.edu.cn';
 const RL_SOCKET_IO_PATH = '/rankland_web/socket.io';
 const AUTH_TOKEN = 'rankland_';
 
@@ -58,7 +58,7 @@ function init() {
     }
 
     if (!socket) {
-      socket = io(`${RL_SOCKET_BASE}/producer`, {
+      socket = io(`${RL_SOCKET_IO_BASE}/producer`, {
         transports: ['websocket'],
         path: RL_SOCKET_IO_PATH,
         auth: {
