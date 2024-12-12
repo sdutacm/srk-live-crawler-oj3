@@ -115,7 +115,6 @@ let competitionId;
 let last = {
   incEventId: 0,
   lastCompetitionEventId: 0,
-  lastSolutionId: 0,
 };
 let localLastCompetitionEventId = 0;
 let localIncEventId = 0;
@@ -168,7 +167,6 @@ const CompetitionEvent = {
   SolutionResultSettle: 'solution:SolutionResultSettle',
   SolutionResultChange: 'solution:SolutionResultChange',
 };
-
 
 function getTimeDurationMS(time) {
   if (typeof time === 'number' || typeof time === 'string') {
@@ -363,7 +361,7 @@ async function syncContest() {
 async function grabEvents() {
   log.info('grab competition events after:', localLastCompetitionEventId);
   const res = await query(
-    `SELECT competition_event_id AS competitionEventId, event, solution_id AS solutionId, detail, created_at AS createdAt FROM competition_event WHERE competition_event_id>? AND competition_id=? AND event IN (?) ORDER BY competition_event_id ASC LIMIT ?`,
+    `SELECT competition_event_id AS competitionEventId, event, solution_id AS solutionId, detail, user_id AS userId, problem_id AS problemId, created_at AS createdAt FROM competition_event WHERE competition_event_id>? AND competition_id=? AND event IN (?) ORDER BY competition_event_id ASC LIMIT ?`,
     [
       localLastCompetitionEventId,
       competitionId,
@@ -382,14 +380,19 @@ async function grabEvents() {
     } catch (e) {
       item.detail = {};
     }
+    item._eventId = ++localIncEventId;
+    if (item.event === CompetitionEvent.SubmitSolution) {
+      item.createdAt = item.detail.time ? new Date(item.detail.time) : item.createdAt;
+    }
     eventBuff.push(item);
   }
 
   if (!res.length) {
-    log.info('no new events, skip');
+    // log.info('no new events, skip');
     return;
   }
 
+  log.info('grabbed events:', res.length);
   localLastCompetitionEventId = res[res.length - 1].competitionEventId;
 }
 
@@ -399,7 +402,7 @@ async function grabEvents() {
 
 function pushEvents() {
   if (!eventBuff.length) {
-    log.info('no events to push');
+    // log.info('no events to push');
     return Promise.resolve();
   }
   log.info(`pushing ${eventBuff.length} events`);
@@ -407,7 +410,7 @@ function pushEvents() {
     switch (item.event) {
       case CompetitionEvent.SubmitSolution: {
         return {
-          eventId: ++localIncEventId,
+          eventId: item._eventId,
           type: rankland_live_contest_common.EventType.NEW_SOLUTION,
           newSolutionData: {
             solutionId: item.solutionId,
@@ -422,7 +425,7 @@ function pushEvents() {
       }
       case CompetitionEvent.JudgeProgress: {
         return {
-          eventId: ++localIncEventId,
+          eventId: item._eventId,
           type: rankland_live_contest_common.EventType.SOLUTION_ON_PROGRESS,
           solutionOnProgressData: {
             solutionId: item.solutionId,
@@ -434,7 +437,7 @@ function pushEvents() {
       }
       case CompetitionEvent.SolutionResultSettle: {
         return {
-          eventId: ++localIncEventId,
+          eventId: item._eventId,
           type: rankland_live_contest_common.EventType.SOLUTION_ON_RESULT_SETTLE,
           solutionOnResultSettleData: {
             solutionId: item.solutionId,
@@ -449,7 +452,7 @@ function pushEvents() {
       }
       case CompetitionEvent.SolutionResultChange: {
         return {
-          eventId: ++localIncEventId,
+          eventId: item._eventId,
           type: rankland_live_contest_common.EventType.SOLUTION_ON_RESULT_CHANGE,
           solutionOnResultChangeData: {
             solutionId: item.solutionId,
