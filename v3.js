@@ -94,14 +94,14 @@ function init() {
       });
 
       socket.on('connect', () => {
-        console.log('socket.io connected'), socket.id;
+        log.info('socket.io producer connected'), socket.id;
         rs();
       });
       socket.on('disconnect', () => {
-        console.log('socket.io disconnected');
+        log.info('socket.io producer disconnected');
       });
       socket.on('connect_error', (e) => {
-        console.error('socket.io connect_error', e);
+        log.error('socket.io producer connect error', e);
         rj(e);
       });
     }
@@ -515,6 +515,8 @@ async function main() {
   await grabUsers();
   // create or update contest
   await syncContest();
+  log.info('ready to start grabbing events');
+  await sleep(2000);
 
   try {
     last = fs.readJSONSync(`./data_v3/${competitionId}_${alias}.json`);
@@ -552,10 +554,9 @@ if (!alias || !competitionId) {
 }
 main()
   .then(() => {
-    log.info('done');
     process.exit(0);
   })
   .catch((e) => {
-    console.error('fatal', e);
+    log.error('fatal', e);
     process.exit(1);
   });
