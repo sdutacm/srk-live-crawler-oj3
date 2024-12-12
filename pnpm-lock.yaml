@@ -17,6 +17,9 @@ dependencies:
   cross-env:
     specifier: ^6.0.3
     version: 6.0.3
+  dayjs:
+    specifier: ^1.11.13
+    version: 1.11.13
   fs-extra:
     specifier: ^8.1.0
     version: 8.1.0
@@ -188,6 +191,10 @@ packages:
   /date-format@4.0.14:
     resolution: {integrity: sha512-39BOQLs9ZjKh0/patS9nrT8wc3ioX3/eA/zgbKNopnF2wCqJEoxywwwElATYvRsXdnOxA/OQeQoFZ3rFjVajhg==}
     engines: {node: '>=4.0'}
+    dev: false
+
+  /dayjs@1.11.13:
+    resolution: {integrity: sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==}
     dev: false
 
   /debug@4.3.4:

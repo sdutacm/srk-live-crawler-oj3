@@ -24,6 +24,7 @@
     "bluebird": "^3.7.2",
     "cheerio": "1.0.0-rc.12",
     "cross-env": "^6.0.3",
+    "dayjs": "^1.11.13",
     "fs-extra": "^8.1.0",
     "lodash": "^4.17.21",
     "log4js": "^6.1.0",

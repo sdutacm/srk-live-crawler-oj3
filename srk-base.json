@@ -1,0 +1,61 @@
+{
+  "contributors": [
+    "algoUX (https://algoux.org)"
+  ],
+  "markers": [],
+  "series": [
+    {
+      "rule": {
+        "options": {
+          "ratio": {
+            "value": [
+              0.1,
+              0.2,
+              0.3
+            ]
+          }
+        },
+        "preset": "ICPC"
+      },
+      "segments": [
+        {
+          "style": "gold",
+          "title": "金奖"
+        },
+        {
+          "style": "silver",
+          "title": "银奖"
+        },
+        {
+          "style": "bronze",
+          "title": "铜奖"
+        }
+      ],
+      "title": "#"
+    },
+    {
+      "rule": {
+        "options": {},
+        "preset": "Normal"
+      },
+      "title": "R#"
+    }
+  ],
+  "sorter": {
+    "algorithm": "ICPC",
+    "config": {
+      "noPenaltyResults": [
+        "FB",
+        "AC",
+        "?",
+        "CE",
+        "UKE",
+        null
+      ],
+      "penalty": [
+        20,
+        "min"
+      ]
+    }
+  }
+}

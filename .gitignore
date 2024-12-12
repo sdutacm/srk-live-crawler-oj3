@@ -6,9 +6,10 @@ package-lock.json
 yarn.lock
 /dist
 /logs
-/configs/oj-db.prod.js
-/configs/oj-redis.prod.js
+/configs/*.prod.js
 /data
 /data_v2
+/data_v3
 /temp
 /filters
+/extra
