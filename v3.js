@@ -18,7 +18,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const MAX_MYSQL_POOL_CONNECTION = 2;
 const GRAB_LIMIT = 100;
-const GRAB_INTERVAL = 100;
+const GRAB_INTERVAL = 200;
 
 let log;
 let dbConf = {};
@@ -298,12 +298,17 @@ async function grabUsers() {
       return;
     }
     const info = parse(item.info, () => ({}));
+    const organization = info.subname
+      ? info.subname
+      : competitionDetail.isTeam
+      ? `${info.members.map((m) => `${m.realName}`).join(' / ')}`
+      : `${info.class} ${info.realName}`;
     const user = JSON.parse(
       JSON.stringify({
         id,
         name: info.nickname,
         official: !(item.unofficial_participation === true || item.unofficial_participation === 1),
-        organization: info.subname || info.organization,
+        organization,
         x_slogan: info.slogan,
       }),
     );
@@ -529,7 +534,12 @@ async function main() {
   let pushSuccess = true;
   while (true) {
     if (pushSuccess) {
-      await grabEvents();
+      try {
+        await grabEvents();
+      } catch (e) {
+        log.error('grab events failed:', e);
+        continue;
+      }
     } else {
       log.info('skip grab due to last push failed');
     }
