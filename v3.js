@@ -478,7 +478,7 @@ function pushEvents() {
   });
 
   return new Promise((resolve, reject) => {
-    socket.timeout(10000).emit(
+    socket.timeout(60000).emit(
       'ProducerEvent',
       rankland_live_contest_producer.BatchProducerEvent.encode({
         events: batchData,
