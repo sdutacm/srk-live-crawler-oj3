@@ -415,7 +415,9 @@ function pushEvents() {
     switch (item.event) {
       case CompetitionEvent.SubmitSolution: {
         if (!problemMap[item.problemId]) {
-          throw new Error(`Unknown problem alias for problem ${item.problemId} from solution ${item.solutionId}`);
+          // throw new Error(`Unknown problem alias for problem ${item.problemId} from solution ${item.solutionId}`);
+          console.warn(`Unknown problem alias for problem ${item.problemId} from solution ${item.solutionId}. Has this problem been deleted?`);
+          return null;
         }
         return {
           eventId: item._eventId,
@@ -478,7 +480,7 @@ function pushEvents() {
         };
       }
     }
-  });
+  }).filter(Boolean);
 
   return new Promise((resolve, reject) => {
     socket.timeout(60000).emit(
