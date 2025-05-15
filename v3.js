@@ -414,13 +414,16 @@ function pushEvents() {
   const batchData = eventBuff.map((item) => {
     switch (item.event) {
       case CompetitionEvent.SubmitSolution: {
+        if (!problemMap[item.problemId]) {
+          throw new Error(`Unknown problem alias for problem ${item.problemId} from solution ${item.solutionId}`);
+        }
         return {
           eventId: item._eventId,
           type: rankland_live_contest_common.EventType.NEW_SOLUTION,
           newSolutionData: {
             solutionId: item.solutionId,
             userId: `${item.userId}`,
-            problemAlias: problemMap[item.problemId] ? problemMap[item.problemId].alias : '',
+            problemAlias: problemMap[item.problemId].alias,
             time: {
               value: getTimeDurationMS(item.createdAt),
               unit: rankland_live_contest_common.TimeUnit.MS,
