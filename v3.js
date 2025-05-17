@@ -321,7 +321,7 @@ async function grabUsers() {
 }
 
 async function syncContest() {
-  const srkBase = fs.readJSONSync('srk-base.json');
+  const srkBase = fs.readJSONSync(process.env.SRK_BASE || 'srk-base.json');
   const extraMembersDataPath = path.join('extra', `${competitionId}_members.json`);
   const membersExtra = fs.readJSONSync(extraMembersDataPath, { throws: false }) || [];
   const members = users.map((user) =>
