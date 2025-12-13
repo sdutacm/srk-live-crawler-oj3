@@ -313,6 +313,7 @@ async function grabUsers() {
         name: info.nickname,
         official: !(item.unofficial_participation === true || item.unofficial_participation === 1),
         organization,
+        location: item.fieldShortName && item.seatNo ? `${item.fieldShortName}-${item.seatNo}` : undefined,
         x_slogan: info.slogan,
       }),
     );
