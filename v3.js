@@ -19,7 +19,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const MAX_MYSQL_POOL_CONNECTION = 2;
 const GRAB_LIMIT = 100;
-const GRAB_INTERVAL = 200;
+const GRAB_INTERVAL = 100;
 
 let log;
 let dbConf = {};
