@@ -7,6 +7,7 @@ const Axios = require('axios');
 const dayjs = require('dayjs');
 const _ = require('lodash');
 const { io } = require('socket.io-client');
+const { Command } = require('commander');
 const { logger, initLogger } = require('./utils/logger');
 const { numberToAlphabet, sleep } = require('./utils');
 const {
@@ -126,6 +127,8 @@ let users = [];
 let problemMap = {};
 let userMap = {};
 let userIdFilter = null;
+let userIdFilterConfigPath;
+let usersMergeDataConfigPath;
 let eventBuff = [];
 
 const ESolutionResult = {
@@ -322,8 +325,20 @@ async function grabUsers() {
 
 async function syncContest() {
   const srkBase = fs.readJSONSync(process.env.SRK_BASE || 'srk-base.json');
-  const extraMembersDataPath = path.join('extra', `${competitionId}_members.json`);
-  const membersExtra = fs.readJSONSync(extraMembersDataPath, { throws: false }) || [];
+  let membersExtra = [];
+  if (usersMergeDataConfigPath) {
+    try {
+      membersExtra = fs.readJSONSync(usersMergeDataConfigPath) || [];
+      log.info('using users merge data from:', usersMergeDataConfigPath);
+    } catch (e) {
+      log.warn('failed to read users merge data config:', e.message);
+    }
+  } else {
+    if (fs.existsSync(path.join('extra', `${competitionId}_members.json`))) {
+      log.info('using extra members data from:', path.join('extra', `${competitionId}_members.json`));
+      membersExtra = fs.readJSONSync(path.join('extra', `${competitionId}_members.json`), { throws: false }) || [];
+    }
+  }
   const members = users.map((user) =>
     _.merge(
       {},
@@ -512,11 +527,16 @@ async function main() {
   log = logger.getLogger(isDev ? 'dev' : 'prod');
   await init();
 
-  log.info('start', alias, competitionId, userIdFilterConfig);
-  try {
-    userIdFilter = fs.readJSONSync(userIdFilterConfig) || null;
-    log.info('using id filter', userIdFilter);
-  } catch (e) {
+  log.info('start', alias, competitionId, { userIdFilterConfigPath, usersMergeDataConfigPath });
+  if (userIdFilterConfigPath) {
+    try {
+      userIdFilter = fs.readJSONSync(userIdFilterConfigPath) || null;
+      log.info('using id filter', userIdFilter);
+    } catch (e) {
+      log.warn('failed to read userIdFilterConfigPath:', e.message);
+      userIdFilter = null;
+    }
+  } else {
     log.info('no id filter');
   }
 
@@ -560,13 +580,23 @@ async function main() {
   }
 }
 
-alias = process.argv[2];
-competitionId = +process.argv[3];
-userIdFilterConfig = process.argv[4];
-if (!alias || !competitionId) {
-  console.error('Usage: node v3.js <alias> <competitionId> [userIdFilter]');
-  process.exit(1);
-}
+const program = new Command();
+
+program
+  .name('v3.js')
+  .description('SRK Live Crawler OJ3')
+  .version('1.0.0')
+  .arguments('<alias> <competitionId>')
+  .option('-f, --user-id-filter <userIdFilterConfigPath>', '用户 ID 过滤配置文件路径（可选）')
+  .option('-m, --users-merge-data <usersMergeDataConfigPath>', '用户信息合并数据配置文件路径（可选）')
+  .action((aliasArg, competitionIdArg, options) => {
+    alias = aliasArg;
+    competitionId = +competitionIdArg;
+    userIdFilterConfigPath = options.userIdFilter || null;
+    usersMergeDataConfigPath = options.usersMergeData || null;
+  })
+  .parse(process.argv);
+
 main()
   .then(() => {
     process.exit(0);
