@@ -129,6 +129,7 @@ let userMap = {};
 let userIdFilter = null;
 let userIdFilterConfigPath;
 let usersMergeDataConfigPath;
+let srkBasePath;
 let eventBuff = [];
 
 const ESolutionResult = {
@@ -324,7 +325,7 @@ async function grabUsers() {
 }
 
 async function syncContest() {
-  const srkBase = fs.readJSONSync(process.env.SRK_BASE || 'srk-base.json');
+  const srkBase = fs.readJSONSync(srkBasePath);
   let membersExtra = [];
   if (usersMergeDataConfigPath) {
     try {
@@ -587,11 +588,13 @@ program
   .description('SRK Live Crawler OJ3')
   .version('1.0.0')
   .arguments('<alias> <competitionId>')
+  .option('-b, --srk-base <srkBasePath>', 'SRK 基础配置文件路径（可选，默认: srk-base.json）', 'srk-base.json')
   .option('-f, --user-id-filter <userIdFilterConfigPath>', '用户 ID 过滤配置文件路径（可选）')
   .option('-m, --users-merge-data <usersMergeDataConfigPath>', '用户信息合并数据配置文件路径（可选）')
   .action((aliasArg, competitionIdArg, options) => {
     alias = aliasArg;
     competitionId = +competitionIdArg;
+    srkBasePath = options.srkBase;
     userIdFilterConfigPath = options.userIdFilter || null;
     usersMergeDataConfigPath = options.usersMergeData || null;
   })
