@@ -116,6 +116,7 @@ let competitionId;
 let last = {
   incEventId: 0,
   lastCompetitionEventId: 0,
+  solutionCacheMap: {},
 };
 let localLastCompetitionEventId = 0;
 let localIncEventId = 0;
@@ -222,6 +223,15 @@ function isValidResult(solution) {
     ESolutionResult.OLE,
     ESolutionResult.PE,
   ].includes(+solution.result);
+}
+
+function isInFrozenTime(time) {
+  if (!time) {
+    return false;
+  }
+  const toCheckTime = time instanceof Date ? time : new Date(time);
+  const startAt = competitionDetail.startAt instanceof Date ? competitionDetail.startAt : new Date(competitionDetail.startAt);
+  return toCheckTime.getTime() >= (startAt.getTime() + competitionSettings.frozenLength * 1000);
 }
 
 async function grabContest() {
@@ -405,6 +415,9 @@ async function grabEvents() {
     item._eventId = ++localIncEventId;
     if (item.event === CompetitionEvent.SubmitSolution) {
       item.createdAt = item.detail.time ? new Date(item.detail.time) : item.createdAt;
+      last.solutionCacheMap[item.solutionId] = {
+        createdAt: item.createdAt, // 提交时间
+      };
     }
     eventBuff.push(item);
   }
@@ -451,6 +464,11 @@ function pushEvents() {
         };
       }
       case CompetitionEvent.JudgeProgress: {
+        // 对于封榜后产生的 JudgeProgress，不推送
+        if (last.solutionCacheMap && last.solutionCacheMap[item.solutionId] && isInFrozenTime(last.solutionCacheMap[item.solutionId].createdAt)) {
+          log.info(`skip JudgeProgress for ${item.solutionId} (at ${dayjs(last.solutionCacheMap[item.solutionId].createdAt).format('YYYY-MM-DD HH:mm:ss')})`);
+          return null;
+        }
         return {
           eventId: item._eventId,
           type: rankland_live_contest_common.EventType.SOLUTION_ON_PROGRESS,
