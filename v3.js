@@ -132,6 +132,7 @@ let userIdFilterConfigPath;
 let usersMergeDataConfigPath;
 let srkBasePath;
 let eventBuff = [];
+let frozenAt;
 
 const ESolutionResult = {
   WT: 0,
@@ -230,8 +231,7 @@ function isInFrozenTime(time) {
     return false;
   }
   const toCheckTime = time instanceof Date ? time : new Date(time);
-  const startAt = competitionDetail.startAt instanceof Date ? competitionDetail.startAt : new Date(competitionDetail.startAt);
-  return toCheckTime.getTime() >= (startAt.getTime() + competitionSettings.frozenLength * 1000);
+  return toCheckTime.getTime() >= frozenAt.getTime();
 }
 
 async function grabContest() {
@@ -263,7 +263,11 @@ async function grabContest() {
     duration: getProperTimeDuration(getTimeDurationMS(competitionDetail.endAt)),
     frozenDuration: getProperTimeDuration(competitionSettings.frozenLength * 1000),
   };
+  const frozenAtTs = (competitionDetail.endAt instanceof Date ? competitionDetail.endAt : new Date(competitionDetail.endAt)).getTime()
+    - competitionSettings.frozenLength * 1000;
+  frozenAt = new Date(frozenAtTs);
   log.info('grabbed contest:', contest);
+  log.info('contest frozen at:', dayjs(frozenAt).format('YYYY-MM-DD HH:mm:ss'));
 }
 
 async function grabProblems() {
