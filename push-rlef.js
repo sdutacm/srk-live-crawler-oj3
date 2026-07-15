@@ -10,6 +10,12 @@ const Axios = require('axios');
 const _ = require('lodash');
 const { Command } = require('commander');
 const { EVENT_FEED_VERSION } = require('./rankland-event-feed.schema');
+const { loadRanklandConfig } = require('./rankland-config');
+const {
+  RANKLAND_CONTEST_FIELDS,
+  flattenRanklandContestPayload,
+  normalizeRanklandTimeDuration,
+} = require('./rankland-contest-http');
 
 /** @typedef {import('./rankland-event-feed.schema').RanklandEventFeedMetadata} RanklandEventFeedMetadata */
 /** @typedef {import('./rankland-event-feed.schema').RanklandInitialContestConfig} RanklandInitialContestConfig */
@@ -25,7 +31,7 @@ const PUSH_SPEED_LEVELS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, MAX_PUSH_BATCH
 const STATUS_PROGRESS_BAR_WIDTHS = [20, 10, 5];
 const CONTEST_UPDATE_FIELDS = [
   'name',
-  'contest',
+  ...RANKLAND_CONTEST_FIELDS,
   'problems',
   'users',
   'markers',
@@ -33,16 +39,6 @@ const CONTEST_UPDATE_FIELDS = [
   'sorter',
   'contributors',
 ];
-
-function loadRanklandConfig() {
-  const configPath = isDev ? './configs/rl-v2.dev' : './configs/rl-v2.prod';
-  try {
-    return require(configPath);
-  } catch (e) {
-    e.message = `Failed to load Rankland config ${configPath}: ${e.message}`;
-    throw e;
-  }
-}
 
 function createRequestClient(rlConf) {
   const req = Axios.create({
@@ -259,6 +255,7 @@ function validateInitialConfig(initialConfig) {
     throw new Error('initial config name must be a non-empty string');
   }
   assertObject(initialConfig.contest, 'initial config contest');
+  flattenRanklandContestPayload(initialConfig, 'initial config');
   if (!Array.isArray(initialConfig.problems)) {
     throw new Error('initial config problems must be an array');
   }
@@ -323,10 +320,11 @@ async function readEventFeed(eventFeedPath) {
 }
 
 function buildCreateContestBody(uk, initialConfig) {
+  const ranklandConfig = flattenRanklandContestPayload(initialConfig, 'initial config');
   const body = { uk };
   for (const field of CONTEST_UPDATE_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(initialConfig, field)) {
-      body[field] = initialConfig[field];
+    if (Object.prototype.hasOwnProperty.call(ranklandConfig, field)) {
+      body[field] = ranklandConfig[field];
     }
   }
   if (!Array.isArray(body.markers)) {
@@ -339,15 +337,17 @@ function buildCreateContestBody(uk, initialConfig) {
 }
 
 function buildContestUpdate(existingContest, initialConfig) {
+  const ranklandConfig = flattenRanklandContestPayload(initialConfig, 'initial config');
   const body = {};
   const changedFields = [];
   for (const field of CONTEST_UPDATE_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(initialConfig, field)) {
+    if (!Object.prototype.hasOwnProperty.call(ranklandConfig, field)) {
       continue;
     }
-    const existingField = normalizeContestFieldForCompare(field, existingContest[field], initialConfig[field]);
-    if (!_.isEqual(existingField, initialConfig[field])) {
-      body[field] = initialConfig[field];
+    const desiredField = ranklandConfig[field];
+    const existingField = normalizeContestFieldForCompare(field, existingContest[field], desiredField);
+    if (!_.isEqual(existingField, desiredField)) {
+      body[field] = desiredField;
       changedFields.push(field);
     }
   }
@@ -355,6 +355,9 @@ function buildContestUpdate(existingContest, initialConfig) {
 }
 
 function normalizeContestFieldForCompare(field, existingField, feedField) {
+  if ((field === 'duration' || field === 'frozenDuration') && Array.isArray(existingField)) {
+    return normalizeRanklandTimeDuration(existingField, `existing contest.${field}`);
+  }
   if (field !== 'users' || !Array.isArray(existingField) || !Array.isArray(feedField)) {
     return existingField;
   }
@@ -793,7 +796,7 @@ async function prepareStream(req, uk) {
 
 async function pushFeed(eventFeedPath) {
   const feed = await readEventFeed(eventFeedPath);
-  const rlConf = loadRanklandConfig();
+  const rlConf = loadRanklandConfig(isDev);
   const req = createRequestClient(rlConf);
 
   console.log(`Rankland API: ${rlConf.apiBase}`);

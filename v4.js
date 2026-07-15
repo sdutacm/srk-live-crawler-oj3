@@ -9,6 +9,8 @@ const _ = require('lodash');
 const { Command } = require('commander');
 const { logger, initLogger } = require('./utils/logger');
 const { numberToAlphabet, sleep } = require('./utils');
+const { loadRanklandConfig } = require('./rankland-config');
+const { flattenRanklandContestPayload } = require('./rankland-contest-http');
 const {
   rankland_live_contest_producer,
   rankland_live_contest_common,
@@ -23,13 +25,11 @@ const DATA_DIR = './data_v4';
 
 let log;
 let dbConf = {};
-let rlConf = {};
+const rlConf = loadRanklandConfig(isDev);
 if (isDev) {
   dbConf = require('./configs/oj-db.dev');
-  rlConf = require('./configs/rl-v2.dev');
 } else {
   dbConf = require('./configs/oj-db.prod');
-  rlConf = require('./configs/rl-v2.prod');
 }
 
 const req = Axios.create({
@@ -392,17 +392,17 @@ function getRawResultValue(ojResult, item, field) {
   return rankland_live_contest_common.Result[rawResultName] ?? rankland_live_contest_common.Result.UKE;
 }
 
-function getProperTimeDuration(durationMS) {
+function getProperTimeDuration(durationMS, label) {
+  if (!Number.isSafeInteger(durationMS) || durationMS < 0 || durationMS % 1000 !== 0) {
+    throw new Error(`${label} must convert exactly to an integer number of seconds`);
+  }
   if (durationMS >= 3600 * 1000 && durationMS % (3600 * 1000) === 0) {
     return [durationMS / (3600 * 1000), 'h'];
   }
   if (durationMS >= 60 * 1000 && durationMS % (60 * 1000) === 0) {
     return [durationMS / (60 * 1000), 'min'];
   }
-  if (durationMS >= 1000 && durationMS % 1000 === 0) {
-    return [durationMS / 1000, 's'];
-  }
-  return [durationMS, 'ms'];
+  return [durationMS / 1000, 's'];
 }
 
 function normalizeText(value) {
@@ -518,8 +518,14 @@ async function grabContest() {
   contest = {
     title: contestTitle,
     startAt: dayjs(competitionDetail.startAt).format('YYYY-MM-DDTHH:mm:ssZ'),
-    duration: getProperTimeDuration(getTimeDurationMS(competitionDetail.endAt)),
-    frozenDuration: getProperTimeDuration(competitionSettings.frozenLength * 1000),
+    duration: getProperTimeDuration(
+      getTimeDurationMS(competitionDetail.endAt),
+      'contest.duration',
+    ),
+    frozenDuration: getProperTimeDuration(
+      competitionSettings.frozenLength * 1000,
+      'contest.frozenDuration',
+    ),
   };
   log.info('grabbed contest:', contest);
 }
@@ -631,11 +637,14 @@ async function syncContest() {
     problems,
     users: mergedUsers,
   });
-  const data = {
-    ...srk,
-    uk,
-    name: getContestName(),
-  };
+  const data = flattenRanklandContestPayload(
+    {
+      ...srk,
+      uk,
+      name: getContestName(),
+    },
+    'crawler payload',
+  );
 
   if (existed) {
     const { uk: _ignoredUk, ...updateData } = data;
