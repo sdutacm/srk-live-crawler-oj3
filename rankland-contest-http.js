@@ -11,6 +11,20 @@ const NULLABLE_RANKLAND_CONTEST_FIELDS = new Set([
   'banner',
   'refLinks',
 ]);
+// Only these SRK-level fields are part of the API v2 contest write contract.
+const RANKLAND_CONTEST_CONFIG_FIELDS = [
+  'uk',
+  'name',
+  'problems',
+  'users',
+  'markers',
+  'series',
+  'sorter',
+  'contributors',
+  'redirectUK',
+  'srkFileID',
+];
+const MAX_CONTEST_DURATION_SECONDS = 0xffffffff;
 
 const DURATION_UNIT_SECONDS = {
   s: 1,
@@ -21,12 +35,16 @@ const DURATION_UNIT_SECONDS = {
 
 function normalizeRanklandTitle(title, label = 'contest.title') {
   if (typeof title === 'string') {
-    return { fallback: title };
+    title = { fallback: title };
   }
-  if (title && typeof title === 'object' && !Array.isArray(title)) {
+  if (
+    title && typeof title === 'object' && !Array.isArray(title) &&
+    typeof title.fallback === 'string' && title.fallback.trim().length > 0 &&
+    Object.values(title).every((value) => typeof value === 'string')
+  ) {
     return title;
   }
-  throw new Error(`${label} must be a string or i18n object`);
+  throw new Error(`${label} must be a non-empty string or i18n object with a non-empty fallback and string values`);
 }
 
 function normalizeRanklandTimeDuration(duration, label = 'contest duration') {
@@ -42,8 +60,8 @@ function normalizeRanklandTimeDuration(duration, label = 'contest duration') {
     throw new Error(`${label} value must be a non-negative finite number`);
   }
   const seconds = value * multiplier;
-  if (!Number.isSafeInteger(seconds)) {
-    throw new Error(`${label} must convert exactly to an integer number of seconds`);
+  if (!Number.isSafeInteger(seconds) || seconds > MAX_CONTEST_DURATION_SECONDS) {
+    throw new Error(`${label} must convert exactly to an integer number of seconds in 0..${MAX_CONTEST_DURATION_SECONDS}`);
   }
   return [seconds, 's'];
 }
@@ -55,10 +73,12 @@ function buildRanklandContestFields(contest, label = 'contest') {
 
   const fields = {};
   for (const field of RANKLAND_CONTEST_FIELDS) {
-    if (!Object.prototype.hasOwnProperty.call(contest, field)) {
-      if (NULLABLE_RANKLAND_CONTEST_FIELDS.has(field)) {
-        fields[field] = null;
-      }
+    // PATCH treats omission as "keep existing" and explicit null as "clear".
+    if (!Object.prototype.hasOwnProperty.call(contest, field) || contest[field] === undefined) {
+      continue;
+    }
+    if (NULLABLE_RANKLAND_CONTEST_FIELDS.has(field) && contest[field] === null) {
+      fields[field] = null;
       continue;
     }
     if (field === 'title') {
@@ -66,14 +86,7 @@ function buildRanklandContestFields(contest, label = 'contest') {
     } else if (field === 'duration') {
       fields.duration = normalizeRanklandTimeDuration(contest.duration, `${label}.duration`);
     } else if (field === 'frozenDuration') {
-      fields.frozenDuration = contest.frozenDuration === null || contest.frozenDuration === undefined
-        ? null
-        : normalizeRanklandTimeDuration(contest.frozenDuration, `${label}.frozenDuration`);
-    } else if (
-      NULLABLE_RANKLAND_CONTEST_FIELDS.has(field) &&
-      (contest[field] === null || contest[field] === undefined)
-    ) {
-      fields[field] = null;
+      fields.frozenDuration = normalizeRanklandTimeDuration(contest.frozenDuration, `${label}.frozenDuration`);
     } else {
       fields[field] = contest[field];
     }
@@ -85,15 +98,41 @@ function flattenRanklandContestPayload(payload, label = 'payload') {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error(`${label} must be a JSON object`);
   }
-  const { contest, ...rest } = payload;
+  const fields = {};
+  for (const field of RANKLAND_CONTEST_CONFIG_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(payload, field) && payload[field] !== undefined) {
+      fields[field] = payload[field];
+    }
+  }
   return {
-    ...rest,
-    ...buildRanklandContestFields(contest, `${label}.contest`),
+    ...fields,
+    ...buildRanklandContestFields(payload.contest, `${label}.contest`),
   };
+}
+
+function buildRanklandContestCreatePayload(payload, label = 'payload') {
+  const fields = flattenRanklandContestPayload(payload, label);
+  // srkFileID is only writable after the contest has been created.
+  delete fields.srkFileID;
+  for (const field of ['problems', 'users', 'markers', 'series']) {
+    if (fields[field] === undefined) {
+      fields[field] = [];
+    }
+  }
+  return fields;
+}
+
+function buildRanklandContestUpdatePayload(payload, label = 'payload') {
+  const fields = flattenRanklandContestPayload(payload, label);
+  // The contest UK is supplied by the route, not the PATCH body.
+  delete fields.uk;
+  return fields;
 }
 
 module.exports = {
   RANKLAND_CONTEST_FIELDS,
+  buildRanklandContestCreatePayload,
+  buildRanklandContestUpdatePayload,
   buildRanklandContestFields,
   flattenRanklandContestPayload,
   normalizeRanklandTimeDuration,

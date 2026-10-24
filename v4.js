@@ -10,7 +10,10 @@ const { Command } = require('commander');
 const { logger, initLogger } = require('./utils/logger');
 const { numberToAlphabet, sleep } = require('./utils');
 const { loadRanklandConfig } = require('./rankland-config');
-const { flattenRanklandContestPayload } = require('./rankland-contest-http');
+const {
+  buildRanklandContestCreatePayload,
+  buildRanklandContestUpdatePayload,
+} = require('./rankland-contest-http');
 const {
   rankland_live_contest_producer,
   rankland_live_contest_common,
@@ -22,6 +25,7 @@ const MAX_MYSQL_POOL_CONNECTION = 2;
 const GRAB_LIMIT = 1;
 const GRAB_INTERVAL = 10000;
 const DATA_DIR = './data_v4';
+const UINT32_MAX = 0xffffffff;
 
 let log;
 let dbConf = {};
@@ -48,7 +52,7 @@ req.interceptors.response.use(
     if (headerError) {
       throw headerError;
     }
-    if (!response.data || typeof response.data !== 'object' || !('success' in response.data)) {
+    if (!response.data || typeof response.data !== 'object' || typeof response.data.success !== 'boolean') {
       throw new Error('Invalid response');
     }
     if (!response.data.success) {
@@ -95,7 +99,7 @@ async function init() {
 function throwApiError(data, status) {
   const e = new Error(`API Error: ${data.msg || data.message || 'Unknown error'} ${data.code}`);
   e.status = status;
-  e.code = data.code;
+  e.code = normalizeApiCode(data.code);
   e.msg = data.msg || data.message;
   for (const key of [
     'expectedEventId',
@@ -111,6 +115,37 @@ function throwApiError(data, status) {
     }
   }
   throw e;
+}
+
+function normalizeApiCode(code) {
+  return typeof code === 'string' && /^-?\d+$/.test(code) ? Number(code) : code;
+}
+
+function isRetryableAppendError(error) {
+  const code = normalizeApiCode(error && error.code);
+  // These errors require correcting the producer or stream state, even if a
+  // proxy reports them with a 5xx status. Retrying the same batch cannot help.
+  if (code === -3 || code === -4 || code === -5 || (code >= 100001 && code <= 100007)) {
+    return false;
+  }
+  const status = error && (error.status || (error.response && error.response.status));
+  if (status) {
+    return status === 408 || status === 429 || (status >= 500 && status <= 599);
+  }
+  // Axios 0.27 reports an interrupted response body as ERR_BAD_RESPONSE even
+  // with no size limit. A real size-limit failure or JSON parse error is fatal.
+  if (
+    error && error.isAxiosError && error.code === 'ERR_BAD_RESPONSE' &&
+    error.request && !error.response && error.config && error.config.maxContentLength === -1
+  ) {
+    return true;
+  }
+  return Boolean(
+    error && error.isAxiosError && new Set([
+      'ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE',
+      'EAI_AGAIN', 'ENOTFOUND', 'ENETUNREACH', 'EHOSTUNREACH', 'ERR_NETWORK',
+    ]).has(error.code),
+  );
 }
 
 function decodeHeaderValue(value) {
@@ -180,6 +215,7 @@ let userIdFilterConfigPath;
 let usersMergeDataConfigPath;
 let srkBasePath;
 let eventBuff = [];
+let pendingAppend = null;
 let skippedSolutionIds = new Set();
 let verbose = false;
 
@@ -267,6 +303,14 @@ function syncLast() {
 function normalizePositiveInteger(value) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function requireUint32(value, label, minimum = 1) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < minimum || number > UINT32_MAX) {
+    throw new Error(`${label} must be a uint32 integer in ${minimum}..${UINT32_MAX}; received ${String(value)}`);
+  }
+  return number;
 }
 
 function sha256Hex(value) {
@@ -410,8 +454,13 @@ function normalizeText(value) {
 }
 
 function isValidContestName(value) {
-  const text = normalizeText(value);
-  return text.length >= 3 && text.length <= 32;
+  const length = Array.from(normalizeText(value)).length;
+  return length >= 3 && length <= 255;
+}
+
+function isValidContestUK(value) {
+  const length = Array.from(normalizeText(value)).length;
+  return length >= 3 && length <= 64;
 }
 
 function getContestTitle() {
@@ -440,7 +489,7 @@ function getContestName() {
     });
     return uk;
   }
-  const fallbackName = `contest-${competitionId}`.slice(0, 32);
+  const fallbackName = `contest-${competitionId}`;
   log.warn('contest title and uk are not valid RL v2 names, fallback to generated name', {
     title: competitionDetail.title,
     uk,
@@ -637,20 +686,14 @@ async function syncContest() {
     problems,
     users: mergedUsers,
   });
-  const data = flattenRanklandContestPayload(
-    {
-      ...srk,
-      uk,
-      name: getContestName(),
-    },
-    'crawler payload',
-  );
+  const payload = { ...srk, uk, name: getContestName() };
 
   if (existed) {
-    const { uk: _ignoredUk, ...updateData } = data;
+    const updateData = buildRanklandContestUpdatePayload(payload, 'crawler payload');
     await req.patch(`/contests/${encodedUk}`, updateData);
     log.info('updated contest', { uk, users: mergedUsers.length, problems: problems.length });
   } else {
+    const data = buildRanklandContestCreatePayload(payload, 'crawler payload');
     await req.post('/contests', data);
     log.info('created contest', { uk, users: mergedUsers.length, problems: problems.length });
   }
@@ -669,11 +712,8 @@ async function getContestStreamState() {
 }
 
 function alignLocalStateWithStream(stream) {
-  const serverStreamRevision = Number(stream.streamRevision) || 0;
-  const serverLastEventId = Number(stream.lastEventId) || 0;
-  if (!serverStreamRevision) {
-    throw new Error('invalid contest streamRevision from rankland-web');
-  }
+  const serverStreamRevision = requireUint32(stream.streamRevision, 'server streamRevision');
+  const serverLastEventId = requireUint32(stream.lastEventId, 'server lastEventId', 0);
 
   if (!last.streamRevision) {
     if (serverLastEventId > 0 && last.incEventId !== serverLastEventId) {
@@ -705,6 +745,7 @@ function alignLocalStateWithStream(stream) {
       serverStreamRevision,
     });
     eventBuff = [];
+    pendingAppend = null;
     last = {
       ...createDefaultLastState(),
       streamRevision: serverStreamRevision,
@@ -722,7 +763,7 @@ function alignLocalStateWithStream(stream) {
 }
 
 function isContestNotFoundError(e) {
-  return e && (e.code === 100001 || e.code === 'CONTEST_NOT_FOUND' || e.status === 404);
+  return Boolean(e && (normalizeApiCode(e.code) === 100001 || e.code === 'CONTEST_NOT_FOUND'));
 }
 
 async function grabEvents() {
@@ -881,11 +922,16 @@ function buildBatchEvents() {
       skipped += 1;
       continue;
     }
+    const data =
+      event.newSolutionData || event.solutionOnProgressData ||
+      event.solutionOnResultSettleData || event.solutionOnResultChangeData;
+    data.solutionId = requireUint32(data.solutionId, 'solutionId');
     if (!item._eventId) {
-      item._eventId = ++localIncEventId;
+      item._eventId = requireUint32(localIncEventId + 1, 'eventId');
+      localIncEventId = item._eventId;
     }
     events.push({
-      eventId: item._eventId,
+      eventId: requireUint32(item._eventId, 'eventId'),
       ...event,
     });
   }
@@ -933,7 +979,10 @@ async function pushEvents() {
     return;
   }
 
-  const { events: batchData, skipped } = buildBatchEvents();
+  const streamRevision = pendingAppend
+    ? pendingAppend.streamRevision
+    : requireUint32(last.streamRevision, 'streamRevision');
+  const { events: batchData, skipped } = pendingAppend || buildBatchEvents();
   if (!batchData.length) {
     log.info('no encodable RL events, syncing local cursor', {
       uk,
@@ -956,24 +1005,32 @@ async function pushEvents() {
   log.info('append RL events start', {
     uk,
     producerId,
-    streamRevision: last.streamRevision,
+    streamRevision,
     count: batchData.length,
     skipped,
     eventIdRange,
   });
 
-  const payload = Buffer.from(
-    rankland_live_contest_producer.BatchProducerEvent.encode({
-      streamRevision: last.streamRevision,
+  if (!pendingAppend) {
+    // A timeout may happen after the server commits. Retain the exact request
+    // until acknowledgement so retries cannot change an existing event's hash.
+    pendingAppend = {
       events: batchData,
-    }).finish(),
-  );
-  const appendPath = `/contests/${encodeURIComponent(uk)}/events`;
-  const appendHeaders = {
-    Accept: 'application/json',
-    'Content-Type': 'application/protobuf',
-    'x-producer-id': producerId,
-  };
+      skipped,
+      streamRevision,
+      lastCompetitionEventId: localLastCompetitionEventId,
+      payload: Buffer.from(
+        rankland_live_contest_producer.BatchProducerEvent.encode({ streamRevision, events: batchData }).finish(),
+      ),
+      appendPath: `/contests/${encodeURIComponent(uk)}/events`,
+      appendHeaders: {
+        Accept: 'application/json',
+        'Content-Type': 'application/protobuf',
+        'x-producer-id': producerId,
+      },
+    };
+  }
+  const { payload, appendPath, appendHeaders } = pendingAppend;
   logAppendRequestDebug(appendPath, appendHeaders, payload, batchData);
 
   try {
@@ -981,6 +1038,14 @@ async function pushEvents() {
       headers: appendHeaders,
       transformRequest: [(data) => data],
     });
+    const acknowledgedEventId = requireUint32(resp && resp.lastEventId, 'append response lastEventId');
+    if (
+      resp.streamRevision !== streamRevision ||
+      acknowledgedEventId < eventIdRange.to ||
+      resp.expectedNextEventId !== acknowledgedEventId + 1
+    ) {
+      throw new Error('Invalid append acknowledgement: event cursor or streamRevision does not match the batch');
+    }
     log.info('append RL events done', {
       uk,
       producerId,
@@ -993,10 +1058,11 @@ async function pushEvents() {
       streamRevision: resp.streamRevision,
     });
     eventBuff = [];
-    last.incEventId = resp.lastEventId;
-    localIncEventId = resp.lastEventId;
-    last.lastCompetitionEventId = localLastCompetitionEventId;
-    last.streamRevision = resp.streamRevision || last.streamRevision;
+    last.incEventId = acknowledgedEventId;
+    localIncEventId = acknowledgedEventId;
+    last.lastCompetitionEventId = pendingAppend.lastCompetitionEventId;
+    last.streamRevision = resp.streamRevision;
+    pendingAppend = null;
     syncLast();
   } catch (e) {
     log.error('append RL events failed', {
@@ -1086,8 +1152,11 @@ async function main() {
         pushSuccess = true;
       })
       .catch((e) => {
-        pushSuccess = false;
         log.error('push events failed:', e);
+        if (!isRetryableAppendError(e)) {
+          throw e;
+        }
+        pushSuccess = false;
       });
     await sleep(GRAB_INTERVAL);
   }
@@ -1115,8 +1184,8 @@ program
   })
   .parse(process.argv);
 
-if (!isValidContestName(uk) || !Number.isInteger(competitionId) || competitionId <= 0) {
-  console.error('valid uk (3..32 chars) and positive integer competitionId are required');
+if (!isValidContestUK(uk) || !Number.isInteger(competitionId) || competitionId <= 0) {
+  console.error('valid uk (3..64 chars) and positive integer competitionId are required');
   process.exit(1);
 }
 
