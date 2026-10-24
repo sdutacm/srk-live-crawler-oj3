@@ -22,8 +22,8 @@ const {
 const isDev = process.env.NODE_ENV === 'development';
 
 const MAX_MYSQL_POOL_CONNECTION = 2;
-const GRAB_LIMIT = 1;
-const GRAB_INTERVAL = 10000;
+const GRAB_LIMIT = 20;
+const GRAB_INTERVAL = 100;
 const DATA_DIR = './data_v4';
 const UINT32_MAX = 0xffffffff;
 
